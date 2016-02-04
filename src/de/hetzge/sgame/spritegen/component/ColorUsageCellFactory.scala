@@ -9,6 +9,11 @@ import javafx.scene.layout.HBox
 import javafx.scene.paint.Color
 import javafx.scene.shape.Rectangle
 import javafx.scene.control.Label
+import javafx.scene.control.ContextMenu
+import javafx.scene.control.MenuItem
+import de.hetzge.sgame.spritegen.FxHelper._
+import javafx.event.ActionEvent
+import de.hetzge.sgame.spritegen.Main
 
 object ColorUsageCellFactory extends Callback[ListView[ColorUsage], ListCell[ColorUsage]] {
   override def call(p: ListView[ColorUsage]): ListCell[ColorUsage] = {
@@ -23,6 +28,20 @@ object ColorUsageCellFactory extends Callback[ListView[ColorUsage], ListCell[Col
         pane.getChildren().add(new Rectangle(15, 15, color))
         pane.getChildren().add(new Label(text))
         setGraphic(pane)
+        setContextMenu(_ContextMenu)
+
+        object _ContextMenu extends ContextMenu {
+          getItems().add(EditMenuItem)
+
+          object EditMenuItem extends MenuItem("Edit") {
+            setOnAction((actionEvent: ActionEvent) => {
+              val optional = new EditColorUsageDialog(colorUsage).showAndWait()
+              optional.ifPresent((newColorUsage: ColorUsage) => {
+                Main.service.replaceColorUsage(newColorUsage, colorUsage)
+              });
+            });
+          }
+        }
       }
     }
   }

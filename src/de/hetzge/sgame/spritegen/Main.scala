@@ -51,9 +51,11 @@ import FxHelper._
 import javafx.scene.control.Accordion
 import javafx.scene.control.TitledPane
 import de.hetzge.sgame.spritegen.component.EditColorUsageDialog
+import javafx.beans.property.SimpleStringProperty
+import javafx.beans.value.ObservableValue
 import de.hetzge.sgame.spritegen.component.ColorUsageCellFactory
 
-case class ColorUsage(val name: String, color: Color)
+case class ColorUsage(val name: String, val color: Color)
 object ColorUsage {
   val NONE = ColorUsage("none", Color.color(0d, 0d, 0d, 0.5d));
 }
@@ -127,6 +129,15 @@ class Model {
 
 class Service {
 
+  def addColorUsage(colorUsage: ColorUsage) = {
+    Main.model.observableColorUsages.add(colorUsage)
+  }
+
+  def replaceColorUsage(newColorUsage: ColorUsage, oldColorUsage: ColorUsage) = {
+    Main.model.observableColorUsages.remove(oldColorUsage)
+    Main.model.observableColorUsages.add(newColorUsage)
+  }
+
 }
 
 package gui {
@@ -164,7 +175,7 @@ package gui {
           setText("+")
           setOnAction((actionEvent: ActionEvent) => {
             val optional = new EditColorUsageDialog().showAndWait()
-            optional.ifPresent((colorUsage: ColorUsage) => result(Main.model.observableColorUsages.add(colorUsage)))
+            optional.ifPresent((colorUsage: ColorUsage) => Main.service.addColorUsage(colorUsage))
           })
         }
 
@@ -181,7 +192,7 @@ package gui {
             val buttonTypeOptional = ConfirmAlert.showAndWait()
             if (buttonTypeOptional.get() == ButtonType.OK) {
               val selectedIndex = ColorUsageList.getSelectionModel().getSelectedIndex()
-              result(Main.model.observableColorUsages.remove(selectedIndex))
+              Main.model.observableColorUsages.remove(selectedIndex)
             }
           })
         }
