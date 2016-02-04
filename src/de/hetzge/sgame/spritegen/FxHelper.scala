@@ -38,4 +38,8 @@ object FxHelper {
 
   implicit def seq2List[T](seq: Seq[T]): java.util.List[T] = wrapAsJava.seqAsJavaList(seq)
 
+  implicit def runnable2Runnable(runnable: () => Any) = new Runnable() {
+    override def run() { runnable() }
+  }
+
 }
