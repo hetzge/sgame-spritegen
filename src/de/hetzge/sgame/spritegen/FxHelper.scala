@@ -7,8 +7,10 @@ import javafx.util.Callback
 import java.util.function.Consumer
 import javafx.beans.value.ChangeListener
 import javafx.beans.value.ObservableValue
-
 import scala.collection.convert.wrapAsJava
+import javafx.scene.layout.AnchorPane
+import javafx.scene.Node
+import java.util.concurrent.Callable
 
 object FxHelper {
 
@@ -36,10 +38,21 @@ object FxHelper {
     override def changed(o: ObservableValue[_ <: T], oldValue: T, newValue: T) = f(o.getValue())
   }
 
+  implicit def callable2callable[T](callable: () => T) = new Callable[T] {
+    override def call(): T = { callable() }
+  }
+
   implicit def seq2List[T](seq: Seq[T]): java.util.List[T] = wrapAsJava.seqAsJavaList(seq)
 
   implicit def runnable2Runnable(runnable: () => Any) = new Runnable() {
     override def run() { runnable() }
+  }
+
+  def setAnchor(node: Node) = {
+    AnchorPane.setTopAnchor(node, 0.0d)
+    AnchorPane.setLeftAnchor(node, 0.0d)
+    AnchorPane.setRightAnchor(node, 0.0d)
+    AnchorPane.setBottomAnchor(node, 0.0d)
   }
 
 }
