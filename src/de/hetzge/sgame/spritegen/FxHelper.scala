@@ -11,6 +11,8 @@ import scala.collection.convert.wrapAsJava
 import javafx.scene.layout.AnchorPane
 import javafx.scene.Node
 import java.util.concurrent.Callable
+import javafx.scene.input.DragEvent
+import javafx.scene.input.MouseDragEvent
 
 object FxHelper {
 
@@ -20,6 +22,14 @@ object FxHelper {
 
   implicit def actionEvent2EventHandler(event: (ActionEvent) => _) = new EventHandler[ActionEvent] {
     override def handle(actionEvent: ActionEvent): Unit = event(actionEvent)
+  }
+
+  implicit def dragEvent2EventHandler(event: (DragEvent) => _) = new EventHandler[DragEvent] {
+    override def handle(dragEvent: DragEvent): Unit = event(dragEvent)
+  }
+
+  implicit def mouseDragEvent2MouseDragEventHandler(event: (MouseDragEvent) => _) = new EventHandler[MouseDragEvent] {
+    override def handle(dragEvent: MouseDragEvent): Unit = event(dragEvent)
   }
 
   implicit def callback2callback[IN, OUT](callback: (IN) => OUT) = new Callback[IN, OUT]() {

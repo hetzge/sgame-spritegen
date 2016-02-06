@@ -2,7 +2,15 @@ package de.hetzge.sgame.spritegen
 
 object Test extends App {
   
+  def x = Math.random()
   
+  def v() = Math.random()
+  
+  println(v)
+  println(v)
+  
+  println(x)
+  println(x)
   
   class A{
     object X{
