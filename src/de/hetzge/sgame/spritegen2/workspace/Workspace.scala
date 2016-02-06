@@ -58,7 +58,7 @@ import javafx.scene.input.MouseButton
 import javafx.scene.input.DragEvent
 import javafx.scene.input.TransferMode
 import javafx.scene.input.MouseDragEvent
-import de.hetzge.sgame.spritegen2.workspace.Coordinate
+import javafx.scene.control.ColorPicker
 
 object Main extends App {
   Application.launch(classOf[GuiApp], args: _*)
@@ -100,10 +100,10 @@ class Workspace {
   val wImage2 = new WritableImage(Constant.WORKAREA_SIZE, Constant.WORKAREA_SIZE)
   ImageService.imageToImage(image1, wImage1)
   ImageService.imageToImage(image2, wImage2)
-  Service.setParts(Vector(wImage1, wImage2), 0)
+  Service.setParts(Vector(wImage1, wImage2), 1)
 
   object Constant {
-    val WORKAREA_SIZE = 128
+    val WORKAREA_SIZE = 64
     def scaledWorkareaSize = WORKAREA_SIZE * Model.Property.scaleFactor.getValue()
   }
 
@@ -124,8 +124,7 @@ class Workspace {
     def setParts(parts: Seq[WritableImage], selectedPart: Int = 0) = {
       Model.Property.parts.clear()
       Model.Property.parts.addAll(parts)
-      Gui.Body.Parts.getChildren().clear()
-      Gui.Body.Parts.getChildren().addAll(parts.zipWithIndex.map {
+      Gui.Body.Parts.setParts(parts.zipWithIndex.map {
         case (image, index) => new Gui.Body.Part(image, index)
       })
       Model.Property.selectedPart.setValue(selectedPart)
@@ -133,6 +132,9 @@ class Workspace {
 
     def pixel(value: Double): Int = (value / Model.Property.scaleFactor.getValue()).toInt
     def pixel(x: Double, y: Double): (Int, Int) = (pixel(x), pixel(y))
+
+    def index(width: Int, x: Int, y: Int) = (width * y) + x
+    def unindex(width: Int, index: Int): (Int, Int) = (index % width, (index - (index % width)) / width)
   }
 
   object Gui extends AnchorPane {
@@ -148,6 +150,7 @@ class Workspace {
     object Header extends ToolBar {
       val toolButtons = Tool.activeTools.map(new ToolButton(_))
       getItems().addAll(toolButtons)
+      getItems().add(PrimaryColorPicker)
       getItems().add(ScaleSlider)
 
       class ToolButton(val tool: Tool) extends Button(tool.name) {
@@ -160,6 +163,10 @@ class Workspace {
         setMax(50)
         valueProperty().bindBidirectional(Model.Property.scaleFactor)
         setShowTickMarks(true)
+      }
+
+      object PrimaryColorPicker extends ColorPicker {
+        valueProperty().bindBidirectional(Model.Property.primaryColor)
       }
     }
     object Body extends AnchorPane {
@@ -178,20 +185,23 @@ class Workspace {
         setOnMouseDragged((mouseEvent: MouseEvent) => {
           val pixel = Service.pixel(mouseEvent.getX(), mouseEvent.getY())
           if (last == null || pixel != last) {
-            Model.Property.tool.getValue().mouseMove(pixel)
+            val (x, y) = pixel
+            Model.Property.tool.getValue().mouseMove(x, y)
             last = pixel
           }
         })
 
         setOnMouseReleased((mouseEvent: MouseEvent) => {
           val pixel = Service.pixel(mouseEvent.getX(), mouseEvent.getY())
-          Model.Property.tool.getValue().mouseUp(pixel)
+          val (x, y) = pixel
+          Model.Property.tool.getValue().mouseUp(x, y)
           last = null
         })
 
         setOnMousePressed((mouseEvent: MouseEvent) => {
           val pixel = Service.pixel(mouseEvent.getX(), mouseEvent.getY())
-          Model.Property.tool.getValue().mouseDown(pixel)
+          val (x, y) = pixel
+          Model.Property.tool.getValue().mouseDown(x, y)
           last = pixel
         })
       }
@@ -251,7 +261,18 @@ class Workspace {
         init()
       }
 
-      object Parts extends Pane
+      object Parts extends Pane {
+        val parts: java.util.List[Part] = new java.util.ArrayList()
+
+        def setParts(parts: Seq[Part]) = {
+          getChildren().clear()
+          getChildren().addAll(parts)
+          this.parts.clear()
+          this.parts.addAll(parts)
+        }
+
+        def getPart(index: Int): Part = parts.get(index)
+      }
 
       trait ScaleablePixel extends Rectangle {
         val x: Int
@@ -273,14 +294,21 @@ class Workspace {
         val height = image.getHeight()
         val pixelReader = image.getPixelReader()
 
-        for (y <- 0 until height.toInt) {
-          for (x <- 0 until width.toInt) {
-            getChildren().add(new PixelRectangle(x, y))
-          }
-        }
+        val pixelRectangles = (0 until (width.intValue() * height.intValue())).map((i: Int) => {
+          val (x, y) = Service.unindex(image.getWidth().intValue(), i)
+          new PixelRectangle(x, y)
+        })
+
+        getChildren().addAll(pixelRectangles)
 
         Model.Property.selectedPart.addListener { selectedIndex: Number =>
           setOpacity(if (selectedIndex == index) 0.8d else 0.4d)
+        }
+
+        def read(x: Int, y: Int) = {
+          val index = Service.index(image.getWidth().intValue(), x, y)
+          val pixelRectangle = pixelRectangles.get(index)
+          pixelRectangle.read()
         }
 
         class PixelRectangle(val x: Int, val y: Int) extends ScaleablePixel {
@@ -289,11 +317,6 @@ class Workspace {
           def read() = {
             val color = image.getPixelReader().getColor(x, y)
             setFill(color)
-          }
-
-          def write() = {
-            val color: Color = getFill().asInstanceOf[Color]
-            image.getPixelWriter().setColor(x, y, color)
           }
         }
       }
@@ -304,33 +327,44 @@ class Workspace {
   trait Tool {
     val name: String;
 
-    def mouseUp(coordinate: (Int, Int)) = {}
-    def mouseDown(coordinate: (Int, Int)) = {}
-    def mouseMove(coordinate: (Int, Int)) = {}
+    def mouseUp(x: Int, y: Int) = {}
+    def mouseDown(x: Int, y: Int) = {}
+    def mouseMove(x: Int, y: Int) = {}
   }
 
   object Tool {
     val activeTools = Vector(Pencil, Rubber, Pipet, Select, Move)
 
-    object Pencil extends Tool {
+    class Pencil extends Tool {
       val name = "Pencil"
-      override def mouseMove(coordinate: (Int, Int)) = {
-        println("mouse move")
+
+      def getColor() = Model.Property.primaryColor.getValue()
+
+      def draw(x: Int, y: Int) = {
+        val selectedPart = Model.Property.selectedPart.getValue()
+        val image = Model.Property.parts.get(selectedPart)
+        val color = getColor()
+        image.getPixelWriter().setColor(x, y, color)
+        Gui.Body.Parts.getPart(selectedPart).read(x, y)
       }
 
-      override def mouseUp(coordinate: (Int, Int)) = {
-        println("mouse up")
-      }
-
-      override def mouseDown(coordinate: (Int, Int)) = {
-        println("mouse down")
-      }
+      override def mouseMove(x: Int, y: Int) = draw(x, y)
+      override def mouseDown(x: Int, y: Int) = draw(x, y)
     }
-    object Rubber extends Tool {
-      val name = "Rubber"
+    object Pencil extends Pencil
+    object Rubber extends Pencil {
+      override val name = "Rubber"
+      override def getColor() = Color.TRANSPARENT
     }
     object Pipet extends Tool {
       val name = "Pipet"
+
+      override def mouseUp(x: Int, y: Int) = {
+        val selectedPart = Model.Property.selectedPart.getValue()
+        val image = Model.Property.parts.get(selectedPart)
+        val color = image.getPixelReader().getColor(x, y)
+        Model.Property.primaryColor.setValue(color)
+      }
     }
     object Select extends Tool {
       val name = "Select"
@@ -339,5 +373,9 @@ class Workspace {
       val name = "Move"
     }
   }
-
 }
+
+// TODO 1 bis 9 Tasten = Tools
+// TODO +/- Helligkeit der Farbe
+// TODO History
+// TODO Select / Move
