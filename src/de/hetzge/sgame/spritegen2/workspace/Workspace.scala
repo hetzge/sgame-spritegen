@@ -60,14 +60,13 @@ import javafx.scene.input.TransferMode
 import javafx.scene.input.MouseDragEvent
 import javafx.scene.control.ColorPicker
 
-object Main extends App {
-  Application.launch(classOf[GuiApp], args: _*)
+object WorkspaceMain extends App {
+  Application.launch(classOf[WorkspaceGuiApp], args: _*)
 }
 
-class GuiApp extends Application {
+class WorkspaceGuiApp extends Application {
   override def start(primaryStage: Stage) {
-
-    primaryStage.setTitle("Sup!")
+    primaryStage.setTitle("Workspace")
 
     val root = new StackPane
     root.getChildren.add(new Workspace().Gui)
@@ -124,8 +123,8 @@ class Workspace {
     def setParts(parts: Seq[WritableImage], selectedPart: Int = 0) = {
       Model.Property.parts.clear()
       Model.Property.parts.addAll(parts)
-      Gui.Body.Parts.setParts(parts.zipWithIndex.map {
-        case (image, index) => new Gui.Body.Part(image, index)
+      Gui.Workarea.Parts.setParts(parts.zipWithIndex.map {
+        case (image, index) => new Gui.Workarea.Part(image, index)
       })
       Model.Property.selectedPart.setValue(selectedPart)
     }
@@ -147,7 +146,21 @@ class Workspace {
       setAnchor(Layout.this)
     }
 
-    object Header extends ToolBar {
+    object Header extends Pane {
+      getChildren().add(ToolMenu)
+    }
+
+    object Body extends AnchorPane {
+      getChildren().add(BodyScrollPane)
+      object BodyScrollPane extends ScrollPane {
+        FxHelper.setAnchor(BodyScrollPane.this)
+        setContent(Workarea)
+      }
+    }
+
+    object Footer extends Pane
+
+    object ToolMenu extends ToolBar {
       val toolButtons = Tool.activeTools.map(new ToolButton(_))
       getItems().addAll(toolButtons)
       getItems().add(PrimaryColorPicker)
@@ -169,42 +182,35 @@ class Workspace {
         valueProperty().bindBidirectional(Model.Property.primaryColor)
       }
     }
-    object Body extends AnchorPane {
-      getChildren().add(BodyScrollPane)
-      object BodyScrollPane extends ScrollPane {
-        FxHelper.setAnchor(BodyScrollPane.this)
-        setContent(Workarea)
-      }
 
-      object Workarea extends Pane {
-        getChildren().add(Parts)
-        getChildren().add(Grid)
+    object Workarea extends Pane {
+      getChildren().add(Parts)
+      getChildren().add(Grid)
 
-        var last: (Int, Int) = null
+      var last: (Int, Int) = null
 
-        setOnMouseDragged((mouseEvent: MouseEvent) => {
-          val pixel = Service.pixel(mouseEvent.getX(), mouseEvent.getY())
-          if (last == null || pixel != last) {
-            val (x, y) = pixel
-            Model.Property.tool.getValue().mouseMove(x, y)
-            last = pixel
-          }
-        })
-
-        setOnMouseReleased((mouseEvent: MouseEvent) => {
-          val pixel = Service.pixel(mouseEvent.getX(), mouseEvent.getY())
+      setOnMouseDragged((mouseEvent: MouseEvent) => {
+        val pixel = Service.pixel(mouseEvent.getX(), mouseEvent.getY())
+        if (last == null || pixel != last) {
           val (x, y) = pixel
-          Model.Property.tool.getValue().mouseUp(x, y)
-          last = null
-        })
-
-        setOnMousePressed((mouseEvent: MouseEvent) => {
-          val pixel = Service.pixel(mouseEvent.getX(), mouseEvent.getY())
-          val (x, y) = pixel
-          Model.Property.tool.getValue().mouseDown(x, y)
+          Model.Property.tool.getValue().mouseMove(x, y)
           last = pixel
-        })
-      }
+        }
+      })
+
+      setOnMouseReleased((mouseEvent: MouseEvent) => {
+        val pixel = Service.pixel(mouseEvent.getX(), mouseEvent.getY())
+        val (x, y) = pixel
+        Model.Property.tool.getValue().mouseUp(x, y)
+        last = null
+      })
+
+      setOnMousePressed((mouseEvent: MouseEvent) => {
+        val pixel = Service.pixel(mouseEvent.getX(), mouseEvent.getY())
+        val (x, y) = pixel
+        Model.Property.tool.getValue().mouseDown(x, y)
+        last = pixel
+      })
 
       trait ReinitInScale {
         def init()
@@ -321,7 +327,7 @@ class Workspace {
         }
       }
     }
-    object Footer extends Pane
+
   }
 
   trait Tool {
@@ -345,7 +351,7 @@ class Workspace {
         val image = Model.Property.parts.get(selectedPart)
         val color = getColor()
         image.getPixelWriter().setColor(x, y, color)
-        Gui.Body.Parts.getPart(selectedPart).read(x, y)
+        Gui.Workarea.Parts.getPart(selectedPart).read(x, y)
       }
 
       override def mouseMove(x: Int, y: Int) = draw(x, y)
