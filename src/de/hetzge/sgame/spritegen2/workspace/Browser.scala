@@ -22,8 +22,6 @@ import javafx.scene.control.Label
 import java.io.FileInputStream
 import java.io.File
 import de.hetzge.sgame.spritegen.FxHelper
-import sun.launcher.LauncherHelper.FXHelper
-import sun.launcher.LauncherHelper.FXHelper
 import javafx.scene.control.ContentDisplay
 import javafx.geometry.Pos
 import javafx.scene.control.Accordion
@@ -139,6 +137,8 @@ class Browser {
                   object CellGraphic extends TitledPane(animation.name, AnimationPartList)
                   object AnimationPartList extends PartList(animation.partsProperty)
                   setGraphic(CellGraphic)
+                } else {
+                  setGraphic(null)
                 }
               }
             }
@@ -158,7 +158,7 @@ class Browser {
       FxHelper.setAnchor(PartBrowser.this)
     }
 
-    class PartList(val parts: ObservableList[Part]) extends ListView[Part] with PartCellHolder {
+    class PartList(val parts: ObservableList[Part], val allowedDragSources: Vector[Any] = Vector()) extends ListView[Part] with PartCellHolder {
       setItems(parts)
       setCellFactory(PartCellFactory)
 
@@ -169,7 +169,9 @@ class Browser {
               super.updateItem(part, empty)
               setContentDisplay(ContentDisplay.GRAPHIC_ONLY);
               if (part != null) {
-                setGraphic(new PartCell(part, true))
+                setGraphic(new PartCell(part))
+              } else {
+                setGraphic(null)
               }
             }
           }
@@ -177,7 +179,7 @@ class Browser {
         }
       }
 
-      class PartCell(val part: Part, val dragGoal: Boolean = true) extends VBox with PartHolder {
+      class PartCell(val part: Part) extends VBox with PartHolder {
         getChildren().add(BeforeDrop)
         getChildren().add(Content)
         getChildren().add(AfterDrop)
@@ -188,8 +190,10 @@ class Browser {
           DragGoal.this.setOnDragOver((dragEvent: DragEvent) => {
             println("drag over")
 
-            dragEvent.acceptTransferModes(TransferMode.ANY: _*)
-            dragEvent.consume()
+            if (allowedDragSources.isEmpty || allowedDragSources.contains(dragEvent.getGestureSource())) {
+              dragEvent.acceptTransferModes(TransferMode.ANY: _*)
+              dragEvent.consume()
+            }
           })
 
           DragGoal.this.setOnDragDropped((dragEvent: DragEvent) => {
@@ -207,11 +211,9 @@ class Browser {
 
         object BeforeDrop extends ToolBar with DragGoal {
           val action = DragAction.PLACE_BEFORE
-          setVisible(dragGoal)
         }
         object AfterDrop extends ToolBar with DragGoal {
           val action = DragAction.PLACE_AFTER
-          setVisible(dragGoal)
         }
 
         object Content extends HBox with PartHolder with DragGoal {
@@ -247,11 +249,15 @@ class Browser {
       val parts: ObservableList[Part]
 
       def add(where: Part, action: DragAction.Value, part: Part): Unit = {
-        val index = parts.indexOf(where)
-        add(index, action, part)
-      }
+        if (where.equals(part)) {
+          return
+        }
+        if (parts.contains(part)) {
+          parts.remove(part)
+        }
 
-      def add(where: Int, action: DragAction.Value, part: Part): Unit = {
+        val whereIndex = parts.indexOf(where)
+
         val offset = action match {
           case DragAction.PLACE_AFTER => 1
           case DragAction.PLACE_BEFORE => 0
@@ -259,21 +265,21 @@ class Browser {
           case _ => throw new IllegalStateException()
         }
 
-        val index = if (where + offset < 0) {
-          0
-        } else if (where + offset >= parts.size()) {
-          parts.size() - 1
-        } else {
-          where + offset
-        }
-
-        println(where, index, part.name, action)
+        val index = whereIndex + offset;
 
         if (action == DragAction.REPLACE) {
           parts.set(index, part)
+          println("replace")
         } else {
-          parts.add(index, part)
+          if (index >= parts.size()) {
+            parts.add(part)
+          } else if (index <= 0) {
+            parts.add(0, part)
+          } else {
+            parts.add(index, part)
+          }
         }
+
       }
     }
 
