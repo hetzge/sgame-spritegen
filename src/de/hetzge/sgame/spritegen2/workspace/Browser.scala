@@ -35,6 +35,7 @@ import javafx.scene.input.ClipboardContent
 import javafx.scene.input.DataFormat
 import javafx.scene.Node
 import javafx.collections.ObservableList
+import javafx.beans.binding.Bindings
 
 object BrowserMain extends App {
   Application.launch(classOf[BrowserGuiApp], args: _*)
@@ -46,6 +47,7 @@ class BrowserGuiApp extends Application {
 
     val root = new StackPane
     root.getChildren.add(new Browser().Gui)
+    root.getStylesheets().add(getClass().getResource("style.css").toExternalForm())
 
     primaryStage.setScene(new Scene(root, 800, 600))
     primaryStage.show()
@@ -77,7 +79,7 @@ class Browser {
 
   val partsList = new java.util.ArrayList[Part]()
   partsList.add(Part("Part A", MutableList(image1, image2)))
-  partsList.add(Part("Part B", MutableList(image2)))
+//  partsList.add(Part("Part B", MutableList(image2)))
 
   Model.Property.animationPool.add(Animation("Animation 1", partsList))
   Model.Property.animationPool.add(Animation("Animation 2", partsList))
@@ -153,7 +155,7 @@ class Browser {
       }
 
       class AnimationBuilder(val animation: Animation) extends Pane {
-        
+
       }
     }
 
@@ -163,9 +165,13 @@ class Browser {
       FxHelper.setAnchor(PartBrowser.this)
     }
 
+    object PartList{
+      val CELL_HEIGHT = 58
+    }
     class PartList(val parts: ObservableList[Part], val dragZone: DragZone, val allowedDragSources: Vector[DragZone] = Vector(NoDragZone)) extends ListView[Part] with PartCellHolder {
       setItems(parts)
       setCellFactory(PartCellFactory)
+      prefHeightProperty().bind(Bindings.size(parts).multiply(PartList.CELL_HEIGHT));
 
       object PartCellFactory extends Callback[ListView[Part], ListCell[Part]] {
         override def call(p: ListView[Part]): ListCell[Part] = {
@@ -227,7 +233,7 @@ class Browser {
           val action = DragAction.PLACE_AFTER
         }
 
-        object Content extends HBox with PartHolder with DragGoal with DragZoneHolder  {
+        object Content extends HBox with PartHolder with DragGoal with DragZoneHolder {
           val dragZone = PartList.this.dragZone
           val action = DragAction.REPLACE
           val part = PartCell.this.part
@@ -256,7 +262,7 @@ class Browser {
     trait PartHolder {
       val part: Part
     }
-    
+
     trait DragZoneHolder {
       val dragZone: DragZone
     }
