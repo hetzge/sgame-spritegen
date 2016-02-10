@@ -56,6 +56,11 @@ object DragAction extends Enumeration {
   val PLACE_BEFORE, PLACE_AFTER, REPLACE = Value
 }
 
+case class DragZone(val name: String)
+object NoDragZone extends DragZone("NO")
+object PartBrowserDragZone extends DragZone("BrowserZone")
+object AnimationBrowserDragZone extends DragZone("AnimationBrowserDragZone")
+
 case class Animation(val name: String, val parts: java.util.ArrayList[Part]) {
   val partsProperty = FXCollections.observableList(parts)
 }
@@ -135,7 +140,7 @@ class Browser {
                 setContentDisplay(ContentDisplay.GRAPHIC_ONLY)
                 if (animation != null) {
                   object CellGraphic extends TitledPane(animation.name, AnimationPartList)
-                  object AnimationPartList extends PartList(animation.partsProperty)
+                  object AnimationPartList extends PartList(animation.partsProperty, AnimationBrowserDragZone, Vector(PartBrowserDragZone, AnimationBrowserDragZone))
                   setGraphic(CellGraphic)
                 } else {
                   setGraphic(null)
@@ -148,17 +153,17 @@ class Browser {
       }
 
       class AnimationBuilder(val animation: Animation) extends Pane {
-
+        
       }
     }
 
     object PartBrowser extends VBox {
       Service.filterParts(PartFilter(null))
-      getChildren().add(new PartList(Model.Property.filteredParts))
+      getChildren().add(new PartList(Model.Property.filteredParts, PartBrowserDragZone, Vector(PartBrowserDragZone)))
       FxHelper.setAnchor(PartBrowser.this)
     }
 
-    class PartList(val parts: ObservableList[Part], val allowedDragSources: Vector[Any] = Vector()) extends ListView[Part] with PartCellHolder {
+    class PartList(val parts: ObservableList[Part], val dragZone: DragZone, val allowedDragSources: Vector[DragZone] = Vector(NoDragZone)) extends ListView[Part] with PartCellHolder {
       setItems(parts)
       setCellFactory(PartCellFactory)
 
@@ -190,10 +195,16 @@ class Browser {
           DragGoal.this.setOnDragOver((dragEvent: DragEvent) => {
             println("drag over")
 
-            if (allowedDragSources.isEmpty || allowedDragSources.contains(dragEvent.getGestureSource())) {
-              dragEvent.acceptTransferModes(TransferMode.ANY: _*)
-              dragEvent.consume()
+            dragEvent.getGestureSource() match {
+              case dragZoneHolder: DragZoneHolder => {
+                if (allowedDragSources.isEmpty || allowedDragSources.contains(dragZoneHolder.dragZone)) {
+                  dragEvent.acceptTransferModes(TransferMode.ANY: _*)
+                  dragEvent.consume()
+                }
+              }
+              case _ => throw new IllegalStateException()
             }
+
           })
 
           DragGoal.this.setOnDragDropped((dragEvent: DragEvent) => {
@@ -216,7 +227,8 @@ class Browser {
           val action = DragAction.PLACE_AFTER
         }
 
-        object Content extends HBox with PartHolder with DragGoal {
+        object Content extends HBox with PartHolder with DragGoal with DragZoneHolder  {
+          val dragZone = PartList.this.dragZone
           val action = DragAction.REPLACE
           val part = PartCell.this.part
           val imageCells = part.images.map(new ImageCell(_))
@@ -243,6 +255,10 @@ class Browser {
 
     trait PartHolder {
       val part: Part
+    }
+    
+    trait DragZoneHolder {
+      val dragZone: DragZone
     }
 
     trait PartCellHolder {
