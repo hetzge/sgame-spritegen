@@ -13,6 +13,8 @@ import javafx.scene.Node
 import java.util.concurrent.Callable
 import javafx.scene.input.DragEvent
 import javafx.scene.input.MouseDragEvent
+import javafx.scene.control.ListCell
+import javafx.scene.control.ListView
 
 object FxHelper {
 
@@ -63,6 +65,16 @@ object FxHelper {
     AnchorPane.setLeftAnchor(node, 0.0d)
     AnchorPane.setRightAnchor(node, 0.0d)
     AnchorPane.setBottomAnchor(node, 0.0d)
+  }
+
+  implicit def implicitUpdateItem[T](update: (ListCell[T], T, Boolean) => _) = new Callback[ListView[T], ListCell[T]]() {
+    override def call(p: ListView[T]): ListCell[T] = {
+      return new ListCell[T]() {
+        override def updateItem(t: T, empty: Boolean) = {
+          update(this, t, empty)
+        }
+      }
+    }
   }
 
 }

@@ -1,41 +1,50 @@
 package de.hetzge.sgame.spritegen2.workspace
 
-import javafx.application.Application
-import javafx.stage.Stage
-import javafx.scene.layout.StackPane
-import javafx.scene.Scene
-import javafx.scene.layout.AnchorPane
-import javafx.scene.image.Image
-import scala.collection.mutable.MutableList
-import scala.collection.mutable.Queue
-import javafx.scene.layout.Pane
-import collection.JavaConversions._
-import javafx.collections.FXCollections
-import javafx.scene.control.ListView
-import javafx.scene.layout.VBox
-import de.hetzge.sgame.spritegen.FxHelper._
-import javafx.scene.control.ListCell
-import javafx.util.Callback
-import javafx.scene.layout.HBox
-import javafx.scene.image.ImageView
-import javafx.scene.control.Label
-import java.io.FileInputStream
 import java.io.File
+import java.io.FileInputStream
+import java.util.ArrayList
+import scala.Vector
+import scala.collection.JavaConversions.asScalaBuffer
+import scala.collection.JavaConversions.bufferAsJavaList
+import scala.collection.JavaConversions.mutableSeqAsJavaList
+import scala.collection.mutable.MutableList
 import de.hetzge.sgame.spritegen.FxHelper
-import javafx.scene.control.ContentDisplay
-import javafx.geometry.Pos
-import javafx.scene.control.Accordion
-import javafx.scene.control.TitledPane
-import javafx.scene.input.MouseEvent
-import javafx.scene.control.ToolBar
-import javafx.scene.input.TransferMode
-import javafx.scene.input.DragEvent
-import javafx.scene.Cursor
-import javafx.scene.input.ClipboardContent
-import javafx.scene.input.DataFormat
-import javafx.scene.Node
-import javafx.collections.ObservableList
+import de.hetzge.sgame.spritegen.FxHelper._
+import de.hetzge.sgame.spritegen.FxHelper.actionEvent2EventHandler
+import de.hetzge.sgame.spritegen.FxHelper.dragEvent2EventHandler
+import de.hetzge.sgame.spritegen.FxHelper.mouseEvent2EventHandler
+import de.jensd.fx.glyphs.GlyphsDude
+import de.jensd.fx.glyphs.fontawesome.FontAwesomeIcon
+import javafx.application.Application
 import javafx.beans.binding.Bindings
+import javafx.collections.FXCollections
+import javafx.collections.ObservableList
+import javafx.event.ActionEvent
+import javafx.scene.Node
+import javafx.scene.Scene
+import javafx.scene.control.Button
+import javafx.scene.control.ContentDisplay
+import javafx.scene.control.Label
+import javafx.scene.control.ListCell
+import javafx.scene.control.ListView
+import javafx.scene.control.TitledPane
+import javafx.scene.control.ToolBar
+import javafx.scene.image.Image
+import javafx.scene.image.ImageView
+import javafx.scene.input.ClipboardContent
+import javafx.scene.input.DragEvent
+import javafx.scene.input.MouseEvent
+import javafx.scene.input.TransferMode
+import javafx.scene.layout.AnchorPane
+import javafx.scene.layout.HBox
+import javafx.scene.layout.Pane
+import javafx.scene.layout.StackPane
+import javafx.scene.layout.VBox
+import javafx.stage.Stage
+import javafx.util.Callback
+import javafx.collections.ListChangeListener
+import javafx.scene.control.TextField
+import javafx.geometry.Insets
 
 object BrowserMain extends App {
   Application.launch(classOf[BrowserGuiApp], args: _*)
@@ -63,10 +72,10 @@ object NoDragZone extends DragZone("NO")
 object PartBrowserDragZone extends DragZone("BrowserZone")
 object AnimationBrowserDragZone extends DragZone("AnimationBrowserDragZone")
 
-case class Animation(val name: String, val parts: java.util.ArrayList[Part]) {
+case class Animation(val name: String = "unnamed", val parts: java.util.List[Part] = new ArrayList[Part]()) {
   val partsProperty = FXCollections.observableList(parts)
 }
-case class Part(val name: String, val images: MutableList[Image])
+case class Part(val name: String = "unnamed", val images: MutableList[Image] = MutableList())
 case class PartFilter(val query: String)
 
 class Browser {
@@ -79,12 +88,14 @@ class Browser {
 
   val partsList = new java.util.ArrayList[Part]()
   partsList.add(Part("Part A", MutableList(image1, image2)))
-//  partsList.add(Part("Part B", MutableList(image2)))
+  //  partsList.add(Part("Part B", MutableList(image2)))
 
   Model.Property.animationPool.add(Animation("Animation 1", partsList))
   Model.Property.animationPool.add(Animation("Animation 2", partsList))
   Model.Property.animationPool.add(Animation("Animation 3", partsList))
   Model.Property.animationPool.add(Animation("Animation 4", partsList))
+
+  Service.filterParts()
 
   object Model {
     val partsPool = new java.util.ArrayList[Part]()
@@ -99,12 +110,21 @@ class Browser {
   }
 
   object Service {
-    def filterParts(filter: PartFilter) = {
+    def filterParts(filter: PartFilter = PartFilter(null)) = {
       val filteredParts = Model.partsPool.filter((part: Part) => {
         filter.query == null || part.name.contains(filter.query)
       })
       Model.Property.filteredParts.clear()
       Model.Property.filteredParts.addAll(filteredParts)
+    }
+
+    def newAnimation() = {
+      Model.Property.animationPool.add(Animation())
+    }
+
+    def newPart() = {
+      Model.Property.partsPool.add(Part())
+      filterParts()
     }
   }
 
@@ -127,68 +147,80 @@ class Browser {
     }
 
     object AnimationBrowser extends VBox {
-      FxHelper.setAnchor(AnimationBrowser.this)
+    	getChildren().add(AnimationBrowserMenu)
       getChildren().add(AnimationList)
+      FxHelper.setAnchor(AnimationBrowser.this)
 
       object AnimationList extends ListView[Animation] {
         setItems(Model.Property.animationPool)
-        setCellFactory(AnimationCellFactory)
-
-        object AnimationCellFactory extends Callback[ListView[Animation], ListCell[Animation]] {
-          override def call(p: ListView[Animation]): ListCell[Animation] = {
-            object Cell extends ListCell[Animation] {
-              override def updateItem(animation: Animation, empty: Boolean) = {
-                super.updateItem(animation, empty)
-                setContentDisplay(ContentDisplay.GRAPHIC_ONLY)
-                if (animation != null) {
-                  object CellGraphic extends TitledPane(animation.name, AnimationPartList)
-                  object AnimationPartList extends PartList(animation.partsProperty, AnimationBrowserDragZone, Vector(PartBrowserDragZone, AnimationBrowserDragZone))
-                  setGraphic(CellGraphic)
-                } else {
-                  setGraphic(null)
-                }
-              }
-            }
-            Cell
+        setCellFactory((listCell: ListCell[Animation], animation: Animation, empty: Boolean) => {
+          listCell.setContentDisplay(ContentDisplay.GRAPHIC_ONLY)
+          if (animation != null) {
+            object CellGraphic extends TitledPane(animation.name, AnimationPartList)
+            object AnimationPartList extends PartList(animation.partsProperty, AnimationBrowserDragZone, Vector(PartBrowserDragZone, AnimationBrowserDragZone))
+            listCell.setGraphic(CellGraphic)
+          } else {
+            listCell.setGraphic(null)
           }
-        }
+        })
       }
 
-      class AnimationBuilder(val animation: Animation) extends Pane {
+      object AnimationBrowserMenu extends ToolBar {
+        getItems().add(NewButton)
 
+        object NewButton extends Button {
+          setGraphic(GlyphsDude.createIcon(FontAwesomeIcon.PLUS_CIRCLE, "24px"))
+          setOnAction((actionEvent: ActionEvent) => {
+            Service.newAnimation()
+          })
+        }
       }
     }
 
     object PartBrowser extends VBox {
-      Service.filterParts(PartFilter(null))
-      getChildren().add(new PartList(Model.Property.filteredParts, PartBrowserDragZone, Vector(PartBrowserDragZone)))
+      getChildren().add(PartBrowserMenu)
+      getChildren().add(PartBrowserPartList)
       FxHelper.setAnchor(PartBrowser.this)
+
+      object PartBrowserMenu extends ToolBar {
+        getItems().add(NewButton)
+        getItems().addAll(SearchInput, SearchButton)
+
+        object SearchInput extends TextField
+
+        object SearchButton extends Button {
+          setGraphic(GlyphsDude.createIcon(FontAwesomeIcon.SEARCH, "24px"))
+          setOnAction((actionEvent: ActionEvent) => {
+            Service.filterParts(PartFilter(SearchInput.getText()))
+          })
+        }
+
+        object NewButton extends Button {
+          setGraphic(GlyphsDude.createIcon(FontAwesomeIcon.PLUS_CIRCLE, "24px"))
+          setOnAction((actionEvent: ActionEvent) => {
+            Service.newPart()
+          })
+        }
+      }
+      
+      object PartBrowserPartList extends PartList(Model.Property.filteredParts, PartBrowserDragZone, Vector(PartBrowserDragZone))
     }
 
-    object PartList{
-      val CELL_HEIGHT = 58
+    object PartList {
+      val CELL_HEIGHT = 60
     }
     class PartList(val parts: ObservableList[Part], val dragZone: DragZone, val allowedDragSources: Vector[DragZone] = Vector(NoDragZone)) extends ListView[Part] with PartCellHolder {
       setItems(parts)
-      setCellFactory(PartCellFactory)
-      prefHeightProperty().bind(Bindings.size(parts).multiply(PartList.CELL_HEIGHT));
-
-      object PartCellFactory extends Callback[ListView[Part], ListCell[Part]] {
-        override def call(p: ListView[Part]): ListCell[Part] = {
-          object Cell extends ListCell[Part] {
-            override def updateItem(part: Part, empty: Boolean) = {
-              super.updateItem(part, empty)
-              setContentDisplay(ContentDisplay.GRAPHIC_ONLY);
-              if (part != null) {
-                setGraphic(new PartCell(part))
-              } else {
-                setGraphic(null)
-              }
-            }
-          }
-          Cell
+      prefHeightProperty().bind(Bindings.size(parts).multiply(PartList.CELL_HEIGHT))
+                    
+      setCellFactory((listCell: ListCell[Part], part: Part, empty: Boolean) => {
+        listCell.setContentDisplay(ContentDisplay.GRAPHIC_ONLY);
+        if (part != null) {
+          listCell.setGraphic(new PartCell(part))
+        } else {
+          listCell.setGraphic(null)
         }
-      }
+      })
 
       class PartCell(val part: Part) extends VBox with PartHolder {
         getChildren().add(BeforeDrop)
@@ -244,10 +276,10 @@ class Browser {
           object CellLabel extends Label {
             setText(part.name)
             setSpacing(10.0d)
-            setTranslateY(5.0d)
+            setPadding(new Insets(5.0d))
           }
 
-          Content.this.setOnDragDetected((mouseEvent: MouseEvent) => {
+          setOnDragDetected((mouseEvent: MouseEvent) => {
             println("start drag")
             val dragBoard = Content.this.startDragAndDrop(TransferMode.ANY: _*)
             val content = new ClipboardContent()
@@ -255,6 +287,7 @@ class Browser {
             dragBoard.setContent(content);
             mouseEvent.consume()
           })
+          
         }
       }
     }
