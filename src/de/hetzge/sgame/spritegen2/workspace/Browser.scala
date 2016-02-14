@@ -45,6 +45,8 @@ import javafx.util.Callback
 import javafx.collections.ListChangeListener
 import javafx.scene.control.TextField
 import javafx.geometry.Insets
+import de.hetzge.sgame.spritegen.component.Repeater
+import de.hetzge.sgame.spritegen.component.Repeater
 
 object BrowserMain extends App {
   Application.launch(classOf[BrowserGuiApp], args: _*)
@@ -147,22 +149,15 @@ class Browser {
     }
 
     object AnimationBrowser extends VBox {
-    	getChildren().add(AnimationBrowserMenu)
+      getChildren().add(AnimationBrowserMenu)
       getChildren().add(AnimationList)
       FxHelper.setAnchor(AnimationBrowser.this)
 
-      object AnimationList extends ListView[Animation] {
-        setItems(Model.Property.animationPool)
-        setCellFactory((listCell: ListCell[Animation], animation: Animation, empty: Boolean) => {
-          listCell.setContentDisplay(ContentDisplay.GRAPHIC_ONLY)
-          if (animation != null) {
-            object CellGraphic extends TitledPane(animation.name, AnimationPartList)
-            object AnimationPartList extends PartList(animation.partsProperty, AnimationBrowserDragZone, Vector(PartBrowserDragZone, AnimationBrowserDragZone))
-            listCell.setGraphic(CellGraphic)
-          } else {
-            listCell.setGraphic(null)
-          }
-        })
+      object AnimationList extends Repeater[Animation](Model.Property.animationPool) {
+        def cellFactory(animation: Animation) = new CellGraphic(animation)
+
+        class AnimationPartList(animation: Animation) extends PartList(animation.partsProperty, AnimationBrowserDragZone, Vector(PartBrowserDragZone, AnimationBrowserDragZone))
+        class CellGraphic(animation: Animation) extends TitledPane(animation.name, new AnimationPartList(animation))
       }
 
       object AnimationBrowserMenu extends ToolBar {
@@ -202,25 +197,15 @@ class Browser {
           })
         }
       }
-      
+
       object PartBrowserPartList extends PartList(Model.Property.filteredParts, PartBrowserDragZone, Vector(PartBrowserDragZone))
     }
 
     object PartList {
       val CELL_HEIGHT = 60
     }
-    class PartList(val parts: ObservableList[Part], val dragZone: DragZone, val allowedDragSources: Vector[DragZone] = Vector(NoDragZone)) extends ListView[Part] with PartCellHolder {
-      setItems(parts)
-      prefHeightProperty().bind(Bindings.size(parts).multiply(PartList.CELL_HEIGHT))
-                    
-      setCellFactory((listCell: ListCell[Part], part: Part, empty: Boolean) => {
-        listCell.setContentDisplay(ContentDisplay.GRAPHIC_ONLY);
-        if (part != null) {
-          listCell.setGraphic(new PartCell(part))
-        } else {
-          listCell.setGraphic(null)
-        }
-      })
+    class PartList(val parts: ObservableList[Part], val dragZone: DragZone, val allowedDragSources: Vector[DragZone] = Vector(NoDragZone)) extends Repeater[Part](parts) with PartCellHolder {
+      def cellFactory(part: Part): Node = new PartCell(part)
 
       class PartCell(val part: Part) extends VBox with PartHolder {
         getChildren().add(BeforeDrop)
@@ -287,7 +272,7 @@ class Browser {
             dragBoard.setContent(content);
             mouseEvent.consume()
           })
-          
+
         }
       }
     }
