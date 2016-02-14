@@ -43,6 +43,8 @@ import javafx.scene.layout.StackPane
 import javafx.scene.layout.VBox
 import javafx.stage.Stage
 import javafx.collections.ListChangeListener
+import de.hetzge.sgame.spritegen.component.DragRepeater
+import de.hetzge.sgame.spritegen.component.DragGroup
 
 object BrowserMain extends App {
   Application.launch(classOf[BrowserGuiApp], args: _*)
@@ -61,14 +63,8 @@ class BrowserGuiApp extends Application {
   }
 }
 
-object DragAction extends Enumeration {
-  val PLACE_BEFORE, PLACE_AFTER, REPLACE, ADD = Value
-}
-
-case class DragZone(val name: String)
-object NoDragZone extends DragZone("NO")
-object PartBrowserDragZone extends DragZone("BrowserZone")
-object AnimationBrowserDragZone extends DragZone("AnimationBrowserDragZone")
+object PartDragGroup extends DragGroup("Part")
+object AnimationPartDragGroup extends DragGroup("AnimationPart")
 
 case class Animation(val name: String = "unnamed", val parts: java.util.List[Part] = new ArrayList[Part]()) {
   val partsProperty = FXCollections.observableList(parts)
@@ -154,102 +150,17 @@ class Browser {
       getChildren().add(PartBrowser)
     }
 
-    trait DragZoneHolder {
-      val dragZone: DragZone
-    }
-
-    trait PartCellHolder {
-      val parts: ObservableList[Part]
-
-      def add(where: Part, action: DragAction.Value, part: Part): Unit = {
-
-        if (action == DragAction.ADD) {
-          parts.add(part)
-          return
-        }
-
-        if (where.equals(part)) {
-          return
-        }
-        if (parts.contains(part)) {
-          parts.remove(part)
-        }
-
-        val whereIndex = parts.indexOf(where)
-
-        val offset = action match {
-          case DragAction.PLACE_AFTER => 1
-          case DragAction.PLACE_BEFORE => 0
-          case DragAction.REPLACE => 0
-          case _ => throw new IllegalStateException()
-        }
-
-        val index = whereIndex + offset;
-
-        if (action == DragAction.REPLACE) {
-          parts.set(index, part)
-          println("replace")
-        } else {
-          if (index >= parts.size()) {
-            parts.add(part)
-          } else if (index <= 0) {
-            parts.add(0, part)
-          } else {
-            parts.add(index, part)
-          }
-        }
-
-      }
-    }
-
-    trait DragGoal extends Node with PartCellHolder {
-      val allowedDragSources: Vector[DragZone]
-      val replacePart: Part
-      val action: DragAction.Value
-
-      DragGoal.this.setOnDragOver((dragEvent: DragEvent) => {
-        println("drag over")
-
-        dragEvent.getGestureSource() match {
-          case dragZoneHolder: DragZoneHolder => {
-            if (allowedDragSources.isEmpty || allowedDragSources.contains(dragZoneHolder.dragZone)) {
-              dragEvent.acceptTransferModes(TransferMode.ANY: _*)
-              dragEvent.consume()
-            }
-          }
-          case _ => throw new IllegalStateException()
-        }
-
-      })
-
-      DragGoal.this.setOnDragDropped((dragEvent: DragEvent) => {
-
-        dragEvent.getGestureSource() match {
-          case partHolder: PartHolder => add(replacePart, action, partHolder.part)
-          case _ => throw new IllegalStateException()
-        }
-
-        dragEvent.setDropCompleted(true)
-        dragEvent.consume()
-      })
-
-    }
-
     object AnimationBrowser extends VBox {
       getChildren().add(AnimationBrowserMenu)
       getChildren().add(AnimationList)
       FxHelper.setAnchor(AnimationBrowser.this)
 
       object AnimationList extends Repeater[Animation](Model.Property.animationPool) {
-        def cellFactory(animation: Animation) = new CellGraphic(animation)
 
-        class AnimationPartList(animation: Animation) extends PartList(animation.partsProperty, AnimationBrowserDragZone, Vector(PartBrowserDragZone, AnimationBrowserDragZone))
-        class CellGraphic(animation: Animation) extends TitledPane(animation.name, new AnimationPartList(animation)) with DragGoal {
-          val allowedDragSources = Vector(AnimationBrowserDragZone, PartBrowserDragZone)
-          val replacePart = null
-          val action = DragAction.ADD
-          val parts = animation.partsProperty
-        }
+        def cellFactory(animation: Animation) = new AnimationPartListCell(animation)
+
+        class AnimationPartListCell(animation: Animation) extends TitledPane(animation.name, new AnimationPartList(animation))
+        class AnimationPartList(animation: Animation) extends PartList(animation.partsProperty, AnimationPartDragGroup, Vector(PartDragGroup, AnimationPartDragGroup))
       }
 
       object AnimationBrowserMenu extends ToolBar {
@@ -290,85 +201,44 @@ class Browser {
         }
       }
 
-      object PartBrowserPartList extends PartList(Model.Property.filteredParts, PartBrowserDragZone, Vector(PartBrowserDragZone))
+      object PartBrowserPartList extends PartList(Model.Property.filteredParts, PartDragGroup, Vector(PartDragGroup))
     }
 
     object PartList {
       val CELL_HEIGHT = 60
     }
-    class PartList(val parts: ObservableList[Part], val dragZone: DragZone, val allowedDragSources: Vector[DragZone] = Vector(NoDragZone)) extends Repeater[Part](parts) with PartCellHolder {
-      def cellFactory(part: Part): Node = new PartCell(part)
+    class PartList(sourceParts: ObservableList[Part], val dragGroup: DragGroup, val allowedDragGroups: Vector[DragGroup]) extends DragRepeater[Part](sourceParts) {
 
-      class PartCell(val part: Part) extends VBox with PartHolder {
-        getChildren().add(BeforeDrop)
-        getChildren().add(Content)
-        getChildren().add(AfterDrop)
+      def dragCellFactory(part: Part): Node = new PartCell(part)
 
-        object BeforeDrop extends ToolBar with DragGoal {
-          val allowedDragSources = PartList.this.allowedDragSources
-          val replacePart = part
-          val action = DragAction.PLACE_BEFORE
-          val parts = PartList.this.parts
-        }
-        object AfterDrop extends ToolBar with DragGoal {
-          val allowedDragSources = PartList.this.allowedDragSources
-          val replacePart = part
-          val action = DragAction.PLACE_AFTER
-          val parts = PartList.this.parts
-        }
+      class PartCell(val part: Part) extends HBox {
+        val imageCells = part.images.map(new ImageCell(_))
+        getChildren().add(DeletePartCellButton)
+        getChildren().add(CellLabel)
+        getChildren().addAll(imageCells)
 
-        object Content extends HBox with PartHolder with DragGoal with DragZoneHolder {
-          val dragZone = PartList.this.dragZone
-          val action = DragAction.REPLACE
-          val part = PartCell.this.part
-          val replacePart = PartCell.this.part
-          val parts = PartList.this.parts
-          val allowedDragSources = PartList.this.allowedDragSources
-          val imageCells = part.images.map(new ImageCell(_))
-          getChildren().add(DeletePartCellButton)
-          getChildren().add(CellLabel)
-          getChildren().addAll(imageCells)
+        object DeletePartCellButton extends Button {
+          setGraphic(GlyphsDude.createIcon(FontAwesomeIcon.REMOVE, "24px"))
+          setOnAction((actionEvent: ActionEvent) => {
+            println("clicked")
+            new Alert(AlertType.CONFIRMATION) {
+              setTitle("Confirm delete")
+              setContentText("Do you really want delete this item ?")
 
-          object DeletePartCellButton extends Button {
-            setGraphic(GlyphsDude.createIcon(FontAwesomeIcon.REMOVE, "24px"))
-            setOnAction((actionEvent: ActionEvent) => {
-              println("clicked")
-              new Alert(AlertType.CONFIRMATION) {
-                setTitle("Confirm delete")
-                setContentText("Do you really want delete this item ?")
-
-                if (showAndWait().get() == ButtonType.OK) {
-                  parts.remove(part)
-                }
+              if (showAndWait().get() == ButtonType.OK) {
+                // TODO
               }
-            })
-          }
-
-          object CellLabel extends Label {
-            setText(part.name)
-            setSpacing(10.0d)
-            setPadding(new Insets(5.0d))
-          }
-
-          setOnDragDetected((mouseEvent: MouseEvent) => {
-            println("start drag")
-            val dragBoard = Content.this.startDragAndDrop(TransferMode.ANY: _*)
-            val content = new ClipboardContent()
-            content.putString("")
-            dragBoard.setContent(content);
-            mouseEvent.consume()
+            }
           })
-
         }
+
+        object CellLabel extends Label {
+          setText(part.name)
+          setSpacing(10.0d)
+          setPadding(new Insets(5.0d))
+        }
+
       }
-    }
-
-    trait PartHolder {
-      val part: Part
-    }
-
-    class AnimationCell extends HBox {
-
     }
 
     class ImageCell(val image: Image) extends ImageView(image) {
@@ -377,4 +247,6 @@ class Browser {
     }
 
   }
+
+  // TODO extract remove ...
 }

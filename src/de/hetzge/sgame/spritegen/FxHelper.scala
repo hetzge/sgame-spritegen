@@ -15,6 +15,7 @@ import javafx.scene.input.DragEvent
 import javafx.scene.input.MouseDragEvent
 import javafx.scene.control.ListCell
 import javafx.scene.control.ListView
+import java.util.function.Predicate
 
 object FxHelper {
 
@@ -75,6 +76,10 @@ object FxHelper {
         }
       }
     }
+  }
+
+  implicit def toJavaPredicate[A](f: Function1[A, Boolean]) = new Predicate[A] {
+    override def test(a: A): Boolean = f(a)
   }
 
 }
