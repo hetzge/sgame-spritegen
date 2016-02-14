@@ -34,6 +34,7 @@ abstract class Repeater[T](val items: ObservableList[T]) extends ScrollPane {
     items.addListener(RepeaterListChangeListener)
     object RepeaterListChangeListener extends ListChangeListener[T] {
       override def onChanged(change: ListChangeListener.Change[_ <: T]) = {
+        println("change")
         refresh()
       }
     }

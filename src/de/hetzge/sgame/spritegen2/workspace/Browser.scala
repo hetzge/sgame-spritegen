@@ -13,20 +13,22 @@ import de.hetzge.sgame.spritegen.FxHelper._
 import de.hetzge.sgame.spritegen.FxHelper.actionEvent2EventHandler
 import de.hetzge.sgame.spritegen.FxHelper.dragEvent2EventHandler
 import de.hetzge.sgame.spritegen.FxHelper.mouseEvent2EventHandler
+import de.hetzge.sgame.spritegen.component.Repeater
 import de.jensd.fx.glyphs.GlyphsDude
 import de.jensd.fx.glyphs.fontawesome.FontAwesomeIcon
 import javafx.application.Application
-import javafx.beans.binding.Bindings
 import javafx.collections.FXCollections
 import javafx.collections.ObservableList
 import javafx.event.ActionEvent
+import javafx.geometry.Insets
 import javafx.scene.Node
 import javafx.scene.Scene
+import javafx.scene.control.Alert
+import javafx.scene.control.Alert.AlertType
 import javafx.scene.control.Button
-import javafx.scene.control.ContentDisplay
+import javafx.scene.control.ButtonType
 import javafx.scene.control.Label
-import javafx.scene.control.ListCell
-import javafx.scene.control.ListView
+import javafx.scene.control.TextField
 import javafx.scene.control.TitledPane
 import javafx.scene.control.ToolBar
 import javafx.scene.image.Image
@@ -37,16 +39,10 @@ import javafx.scene.input.MouseEvent
 import javafx.scene.input.TransferMode
 import javafx.scene.layout.AnchorPane
 import javafx.scene.layout.HBox
-import javafx.scene.layout.Pane
 import javafx.scene.layout.StackPane
 import javafx.scene.layout.VBox
 import javafx.stage.Stage
-import javafx.util.Callback
 import javafx.collections.ListChangeListener
-import javafx.scene.control.TextField
-import javafx.geometry.Insets
-import de.hetzge.sgame.spritegen.component.Repeater
-import de.hetzge.sgame.spritegen.component.Repeater
 
 object BrowserMain extends App {
   Application.launch(classOf[BrowserGuiApp], args: _*)
@@ -108,6 +104,13 @@ class Browser {
       val partsPool = FXCollections.observableList(Model.this.partsPool)
       val filteredParts = FXCollections.observableList(Model.this.filteredParts)
       val animationPool = FXCollections.observableList(Model.this.animationPool)
+
+      partsPool.addListener(FilterPartPoolListener)
+      object FilterPartPoolListener extends ListChangeListener[Part] {
+        override def onChanged(change: ListChangeListener.Change[_ <: Part]) = {
+          Service.filterParts(PartFilter(null))
+        }
+      }
     }
   }
 
@@ -126,7 +129,10 @@ class Browser {
 
     def newPart() = {
       Model.Property.partsPool.add(Part())
-      filterParts()
+    }
+
+    def deletePart(part: Part) {
+      Model.Property.partsPool.removeAll(part)
     }
   }
 
@@ -156,12 +162,12 @@ class Browser {
       val parts: ObservableList[Part]
 
       def add(where: Part, action: DragAction.Value, part: Part): Unit = {
-        
-        if(action == DragAction.ADD){
+
+        if (action == DragAction.ADD) {
           parts.add(part)
           return
         }
-        
+
         if (where.equals(part)) {
           return
         }
@@ -319,8 +325,24 @@ class Browser {
           val parts = PartList.this.parts
           val allowedDragSources = PartList.this.allowedDragSources
           val imageCells = part.images.map(new ImageCell(_))
+          getChildren().add(DeletePartCellButton)
           getChildren().add(CellLabel)
           getChildren().addAll(imageCells)
+
+          object DeletePartCellButton extends Button {
+            setGraphic(GlyphsDude.createIcon(FontAwesomeIcon.REMOVE, "24px"))
+            setOnAction((actionEvent: ActionEvent) => {
+              println("clicked")
+              new Alert(AlertType.CONFIRMATION) {
+                setTitle("Confirm delete")
+                setContentText("Do you really want delete this item ?")
+
+                if (showAndWait().get() == ButtonType.OK) {
+                  parts.remove(part)
+                }
+              }
+            })
+          }
 
           object CellLabel extends Label {
             setText(part.name)
@@ -349,7 +371,10 @@ class Browser {
 
     }
 
-    class ImageCell(val image: Image) extends ImageView(image)
+    class ImageCell(val image: Image) extends ImageView(image) {
+      fitWidthProperty().set(32)
+      fitHeightProperty().set(32)
+    }
 
   }
 }
