@@ -66,7 +66,7 @@ class BrowserGuiApp extends Application {
 }
 
 object DragAction extends Enumeration {
-  val PLACE_BEFORE, PLACE_AFTER, REPLACE = Value
+  val PLACE_BEFORE, PLACE_AFTER, REPLACE, ADD = Value
 }
 
 case class DragZone(val name: String)
@@ -148,6 +148,87 @@ class Browser {
       getChildren().add(PartBrowser)
     }
 
+    trait DragZoneHolder {
+      val dragZone: DragZone
+    }
+
+    trait PartCellHolder {
+      val parts: ObservableList[Part]
+
+      def add(where: Part, action: DragAction.Value, part: Part): Unit = {
+        
+        if(action == DragAction.ADD){
+          parts.add(part)
+          return
+        }
+        
+        if (where.equals(part)) {
+          return
+        }
+        if (parts.contains(part)) {
+          parts.remove(part)
+        }
+
+        val whereIndex = parts.indexOf(where)
+
+        val offset = action match {
+          case DragAction.PLACE_AFTER => 1
+          case DragAction.PLACE_BEFORE => 0
+          case DragAction.REPLACE => 0
+          case _ => throw new IllegalStateException()
+        }
+
+        val index = whereIndex + offset;
+
+        if (action == DragAction.REPLACE) {
+          parts.set(index, part)
+          println("replace")
+        } else {
+          if (index >= parts.size()) {
+            parts.add(part)
+          } else if (index <= 0) {
+            parts.add(0, part)
+          } else {
+            parts.add(index, part)
+          }
+        }
+
+      }
+    }
+
+    trait DragGoal extends Node with PartCellHolder {
+      val allowedDragSources: Vector[DragZone]
+      val replacePart: Part
+      val action: DragAction.Value
+
+      DragGoal.this.setOnDragOver((dragEvent: DragEvent) => {
+        println("drag over")
+
+        dragEvent.getGestureSource() match {
+          case dragZoneHolder: DragZoneHolder => {
+            if (allowedDragSources.isEmpty || allowedDragSources.contains(dragZoneHolder.dragZone)) {
+              dragEvent.acceptTransferModes(TransferMode.ANY: _*)
+              dragEvent.consume()
+            }
+          }
+          case _ => throw new IllegalStateException()
+        }
+
+      })
+
+      DragGoal.this.setOnDragDropped((dragEvent: DragEvent) => {
+
+        dragEvent.getGestureSource() match {
+          case partHolder: PartHolder => add(replacePart, action, partHolder.part)
+          case _ => throw new IllegalStateException()
+        }
+
+        dragEvent.setDropCompleted(true)
+        dragEvent.consume()
+      })
+
+    }
+
     object AnimationBrowser extends VBox {
       getChildren().add(AnimationBrowserMenu)
       getChildren().add(AnimationList)
@@ -157,7 +238,12 @@ class Browser {
         def cellFactory(animation: Animation) = new CellGraphic(animation)
 
         class AnimationPartList(animation: Animation) extends PartList(animation.partsProperty, AnimationBrowserDragZone, Vector(PartBrowserDragZone, AnimationBrowserDragZone))
-        class CellGraphic(animation: Animation) extends TitledPane(animation.name, new AnimationPartList(animation))
+        class CellGraphic(animation: Animation) extends TitledPane(animation.name, new AnimationPartList(animation)) with DragGoal {
+          val allowedDragSources = Vector(AnimationBrowserDragZone, PartBrowserDragZone)
+          val replacePart = null
+          val action = DragAction.ADD
+          val parts = animation.partsProperty
+        }
       }
 
       object AnimationBrowserMenu extends ToolBar {
@@ -212,48 +298,26 @@ class Browser {
         getChildren().add(Content)
         getChildren().add(AfterDrop)
 
-        trait DragGoal extends Node {
-          val action: DragAction.Value
-
-          DragGoal.this.setOnDragOver((dragEvent: DragEvent) => {
-            println("drag over")
-
-            dragEvent.getGestureSource() match {
-              case dragZoneHolder: DragZoneHolder => {
-                if (allowedDragSources.isEmpty || allowedDragSources.contains(dragZoneHolder.dragZone)) {
-                  dragEvent.acceptTransferModes(TransferMode.ANY: _*)
-                  dragEvent.consume()
-                }
-              }
-              case _ => throw new IllegalStateException()
-            }
-
-          })
-
-          DragGoal.this.setOnDragDropped((dragEvent: DragEvent) => {
-
-            dragEvent.getGestureSource() match {
-              case partHolder: PartHolder => add(part, action, partHolder.part)
-              case _ => throw new IllegalStateException()
-            }
-
-            dragEvent.setDropCompleted(true)
-            dragEvent.consume()
-          })
-
-        }
-
         object BeforeDrop extends ToolBar with DragGoal {
+          val allowedDragSources = PartList.this.allowedDragSources
+          val replacePart = part
           val action = DragAction.PLACE_BEFORE
+          val parts = PartList.this.parts
         }
         object AfterDrop extends ToolBar with DragGoal {
+          val allowedDragSources = PartList.this.allowedDragSources
+          val replacePart = part
           val action = DragAction.PLACE_AFTER
+          val parts = PartList.this.parts
         }
 
         object Content extends HBox with PartHolder with DragGoal with DragZoneHolder {
           val dragZone = PartList.this.dragZone
           val action = DragAction.REPLACE
           val part = PartCell.this.part
+          val replacePart = PartCell.this.part
+          val parts = PartList.this.parts
+          val allowedDragSources = PartList.this.allowedDragSources
           val imageCells = part.images.map(new ImageCell(_))
           getChildren().add(CellLabel)
           getChildren().addAll(imageCells)
@@ -279,48 +343,6 @@ class Browser {
 
     trait PartHolder {
       val part: Part
-    }
-
-    trait DragZoneHolder {
-      val dragZone: DragZone
-    }
-
-    trait PartCellHolder {
-      val parts: ObservableList[Part]
-
-      def add(where: Part, action: DragAction.Value, part: Part): Unit = {
-        if (where.equals(part)) {
-          return
-        }
-        if (parts.contains(part)) {
-          parts.remove(part)
-        }
-
-        val whereIndex = parts.indexOf(where)
-
-        val offset = action match {
-          case DragAction.PLACE_AFTER => 1
-          case DragAction.PLACE_BEFORE => 0
-          case DragAction.REPLACE => 0
-          case _ => throw new IllegalStateException()
-        }
-
-        val index = whereIndex + offset;
-
-        if (action == DragAction.REPLACE) {
-          parts.set(index, part)
-          println("replace")
-        } else {
-          if (index >= parts.size()) {
-            parts.add(part)
-          } else if (index <= 0) {
-            parts.add(0, part)
-          } else {
-            parts.add(index, part)
-          }
-        }
-
-      }
     }
 
     class AnimationCell extends HBox {
