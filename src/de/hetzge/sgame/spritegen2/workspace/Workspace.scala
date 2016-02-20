@@ -59,6 +59,8 @@ import javafx.scene.input.DragEvent
 import javafx.scene.input.TransferMode
 import javafx.scene.input.MouseDragEvent
 import javafx.scene.control.ColorPicker
+import javafx.beans.value.ObservableValue
+import javafx.beans.value.ChangeListener
 
 object WorkspaceMain extends App {
   Application.launch(classOf[WorkspaceGuiApp], args: _*)
@@ -168,7 +170,11 @@ class Workspace {
 
       class ToolButton(val tool: Tool) extends Button(tool.name) {
         setOnAction((actionEvent: ActionEvent) => Model.Property.tool.setValue(tool))
-        Model.Property.tool.addListener((other: Tool) => setHover(other.equals(other)))
+        Model.Property.tool.addListener(new ChangeListener[Tool] {
+          def changed(observable: ObservableValue[_ <: Tool], oldValue: Tool, newValue: Tool) = {
+            setHover(tool.equals(newValue))
+          }
+        })
       }
 
       object ScaleSlider extends Slider {
@@ -215,8 +221,10 @@ class Workspace {
       trait ReinitInScale {
         def init()
 
-        Model.Property.scaleFactor.addListener((scaleFactor: Number) => {
-          init()
+        Model.Property.scaleFactor.addListener(new ChangeListener[Number] {
+          def changed(observable: ObservableValue[_ <: Number], oldValue: Number, newValue: Number) = {
+            init()
+          }
         })
       }
 
@@ -307,9 +315,11 @@ class Workspace {
 
         getChildren().addAll(pixelRectangles)
 
-        Model.Property.selectedPart.addListener { selectedIndex: Number =>
-          setOpacity(if (selectedIndex == index) 0.8d else 0.4d)
-        }
+        Model.Property.selectedPart.addListener(new ChangeListener[Number] {
+          def changed(observable: ObservableValue[_ <: Number], oldValue: Number, newValue: Number) = {
+            setOpacity(if (newValue == index) 0.8d else 0.4d)
+          }
+        })
 
         def read(x: Int, y: Int) = {
           val index = Service.index(image.getWidth().intValue(), x, y)

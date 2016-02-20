@@ -13,23 +13,22 @@ import javafx.scene.control.TitledPane
 import javafx.scene.layout.Pane
 import javafx.scene.layout.Border
 import javafx.scene.layout.HBox
+import javafx.scene.layout.BorderPane
 
-abstract class Repeater[T](val items: ObservableList[T], val vertical: Boolean = true) extends ScrollPane {
+abstract class Repeater[T](val items: ObservableList[T], val vertical: Boolean = true) extends BorderPane  {
 
   def cellFactory(t: T): Node
-
+  
+  def init() = layoutPane.refresh()
+  
   val layoutPane = if (vertical) {
     new VBox with Layout
   } else {
     new HBox with Layout
   }
-  setContent(layoutPane)
-  setFitToHeight(true)
-  setFitToWidth(true)
+  setCenter(layoutPane)
 
   trait Layout extends Pane {
-    refresh()
-
     def refresh() = {
       val nodes = items.map((item: T) => new AnchorPane() {
         val node = cellFactory(item)
@@ -49,3 +48,5 @@ abstract class Repeater[T](val items: ObservableList[T], val vertical: Boolean =
     }
   }
 }
+
+

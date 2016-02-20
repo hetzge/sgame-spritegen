@@ -1,18 +1,18 @@
 package de.hetzge.sgame.spritegen.component
 
-import javafx.scene.Node
-import javafx.scene.input.DragEvent
 import de.hetzge.sgame.spritegen.FxHelper._
-import javafx.scene.input.TransferMode
-import javafx.beans.Observable
 import javafx.collections.ObservableList
+import javafx.collections.transformation.FilteredList
+import javafx.scene.Node
+import javafx.scene.control.Separator
+import javafx.scene.input.ClipboardContent
+import javafx.scene.input.DragEvent
+import javafx.scene.input.MouseEvent
+import javafx.scene.input.TransferMode
+import javafx.scene.layout.HBox
 import javafx.scene.layout.Pane
 import javafx.scene.layout.VBox
-import javafx.scene.layout.HBox
-import javafx.scene.control.ToolBar
-import javafx.scene.input.MouseEvent
-import javafx.scene.input.ClipboardContent
-import javafx.collections.transformation.FilteredList
+import javafx.geometry.Orientation
 
 object DragAction extends Enumeration {
   val PLACE_BEFORE, PLACE_AFTER, REPLACE, ADD = Value
@@ -40,7 +40,6 @@ trait DragSource[T] extends Node with ItemHolder[T] {
 }
 
 trait DragGoal[T] extends Node with ItemHolder[T] {
-  val item: T
   val allowedDragGroups: Vector[DragGroup]
   val action: DragAction.Value
 
@@ -49,6 +48,10 @@ trait DragGoal[T] extends Node with ItemHolder[T] {
   DragGoal.this.setOnDragOver((dragEvent: DragEvent) => {
     println("drag over")
 
+    println(dragEvent)
+    println(dragEvent.getGestureSource())
+    println(this)
+    println(this.getClass())
     dragEvent.getGestureSource() match {
       case dragSource: DragSource[T] => {
         if (allowedDragGroups.isEmpty || allowedDragGroups.contains(dragSource.dragGroup)) {
@@ -121,9 +124,12 @@ trait DragList[T] extends DragGoal[T] {
   }
 }
 
-abstract class DragRepeater[T >: Null](val sourceItems: ObservableList[T], vertical: Boolean = true) extends Repeater[T](sourceItems.filtered((item: T) => true), vertical) with DragList[T] with DragGoal[T] {
+abstract class DragRepeater[T >: Null](val sourceItems: ObservableList[T], vertical: Boolean = false)
+    extends Repeater[T](sourceItems.filtered((item: T) => true), vertical)
+    with DragList[T]
+    with DragGoal[T] {
+
   val dragGroup: DragGroup
-  val allowedDragGroups: Vector[DragGroup]
 
   def dragCellFactory(t: T): Node
 
@@ -132,6 +138,7 @@ abstract class DragRepeater[T >: Null](val sourceItems: ObservableList[T], verti
 
   trait DragDecorator extends DragSource[T] with DragGoal[T] {
     val dragGroup: DragGroup = DragRepeater.this.dragGroup
+    println("Here: " + DragRepeater.this.allowedDragGroups)
     val allowedDragGroups: Vector[DragGroup] = DragRepeater.this.allowedDragGroups
     val action: DragAction.Value = DragAction.REPLACE
 
@@ -149,7 +156,9 @@ abstract class DragRepeater[T >: Null](val sourceItems: ObservableList[T], verti
       }
     }
 
-    trait DragAround extends ToolBar with DragGoal[T] {
+    trait DragAround extends Separator with DragGoal[T] {
+      setOrientation(if (DragRepeater.this.vertical) Orientation.HORIZONTAL else Orientation.VERTICAL)
+
       val allowedDragGroups: Vector[DragGroup] = DragRepeater.this.allowedDragGroups
 
       def onDragDropped(source: DragSource[T], goal: DragGoal[T], action: DragAction.Value) = DragRepeater.this.add(goal.item, action, source.item)
@@ -158,6 +167,7 @@ abstract class DragRepeater[T >: Null](val sourceItems: ObservableList[T], verti
     object BeforeDrop extends DragAround {
       val item: T = itemParameter
       val action = DragAction.PLACE_BEFORE
+
     }
     object AfterDrop extends DragAround {
       val item: T = itemParameter

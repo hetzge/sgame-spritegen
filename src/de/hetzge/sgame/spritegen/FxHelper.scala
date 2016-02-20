@@ -50,7 +50,7 @@ object FxHelper {
   implicit def changeListener2ChangeListener[T](f: (T) => Any) = new ChangeListener[T] {
     override def changed(o: ObservableValue[_ <: T], oldValue: T, newValue: T) = f(o.getValue())
   }
-
+  
   implicit def callable2callable[T](callable: () => T) = new Callable[T] {
     override def call(): T = { callable() }
   }
